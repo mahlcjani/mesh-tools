@@ -1,0 +1,21 @@
+
+[keys]
+
+fullname = [
+    { name = "Imiona i nazwisko", surname_at_end = true, extract_names = true },
+    { name = "firstLastName", surname_at_end = true, extract_names = true }
+]
+
+names = [
+    { name = "Imiona" },
+    { name = "firstName" }
+]
+
+surname = [
+    { name = "Nazwisko" },
+    { name = "lastName" }
+]
+
+birthdate = [
+    { name = "birthDate" }
+]

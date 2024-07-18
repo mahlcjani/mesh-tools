@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mesh-tools"
+description = "Tools for dealing with mesh (disclosed)"
+version = "0.0.1"
+requires-python = ">=3.10"
+readme = "README.md"
+dependencies = []
+authors = [{ name = "Maciej Misiołek", email = "mahlcjani@proton.me" }]
+license = { text = "MIT License" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python",
+]
+
+[project.scripts]
+csv2json = "meshtools.scripts:csv2json"
+normjson = "meshtools.scripts:normjson"
+
+[project.urls]
+Homepage = "https://github.com/mahlcjani/mesh-tools"
+
+[tool.setuptools]
+package-dir = { "meshtools" = "src" }
+packages = ["meshtools", "meshtools.mapping", "meshtools.scripts"]
