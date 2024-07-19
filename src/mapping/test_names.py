@@ -1,13 +1,16 @@
-
-from .names import NameMapper
 from unittest import TestCase
 import pytest
+
+from .names import NameMapper
+
 
 @pytest.fixture
 def samples():
     return [
         {
-            "in": { "fullname": "vincent willem van gogh" },
+            "in": {
+                "fullname": "vincent willem van gogh"
+            },
             "out": {
                 "firstname": "Vincent",
                 "surname": "van Gogh",
@@ -17,7 +20,9 @@ def samples():
             }
         },
         {
-            "in": { "fullname": "ludwig van der berg" },
+            "in": {
+                "fullname": "ludwig van der berg"
+            },
             "out": {
                 "firstname": "Ludwig",
                 "surname": "van der Berg",
@@ -27,7 +32,9 @@ def samples():
             }
         },
         {
-            "in": { "fullname": "JOE Peter SMITH vel jaMEs" },
+            "in": {
+                "fullname": "JOE Peter SMITH vel jaMEs"
+            },
             "out": {
                 "firstname": "Joe",
                 "surname": "Smith",
@@ -38,17 +45,19 @@ def samples():
         },
     ]
 
+
 def test_name_mapper(samples):
     mapper = NameMapper(fullname=[{"name": "fullname"}])
 
     for sample in samples:
         TestCase().assertDictEqual(sample["out"], mapper.map(sample["in"]))
 
+
 def test_match_surname_at_start():
     match = NameMapper.match_surname_at_start("Sur-Name FirstName SecondName")
     assert match
     assert match.group("surname") == "Sur-Name"
-    assert match.group("preposition") == None
+    assert match.group("preposition") is None
     assert match.group("fullsurname") == "Sur-Name"
     assert match.string[match.end():].split() == ["FirstName", "SecondName"]
 

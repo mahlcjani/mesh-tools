@@ -1,18 +1,23 @@
 from datetime import date, datetime
 
-__plformat = "%d-%m-%Y"
+__PLFORMAT = "%d-%m-%Y"
 
-def fromisoformat(str: str) -> date:
-    return datetime.fromisoformat(str).date()
 
-def isoformat(date: date) -> str:
-    return date.isoformat()
+def fromisoformat(date_string: str) -> date:
+    return datetime.fromisoformat(date_string).date()
 
-def fromplformat(str: str) -> date:
-    return datetime.strptime(str, __plformat).date()
 
-def plformat(date: date) -> str:
-    return date.strftime(__plformat)
+def isoformat(dt: date) -> str:
+    return dt.isoformat()
+
+
+def fromplformat(date_string: str) -> date:
+    return datetime.strptime(date_string, __PLFORMAT).date()
+
+
+def plformat(dt: date) -> str:
+    return date.strftime(dt, __PLFORMAT)
+
 
 def frompesel(pesel: str) -> date:
     # naive - assert length and all digits

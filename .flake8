@@ -1,0 +1,9 @@
+[flake8]
+# E201 and E202 are evil as they do not differentiate brackets
+#extend-ignore = E201, E202
+exclude =
+    .git,
+    __pycache__,
+    dist
+max-complexity = 10
+max-line-length = 100

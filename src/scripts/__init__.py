@@ -6,6 +6,7 @@ import tomllib
 
 from ..mapping.names import CompositeMapper, BirthdateMapper, NameMapper
 
+
 def csv2json():
     parser = argparse.ArgumentParser(description="Convert CSV to JSON")
     parser.add_argument(
@@ -41,20 +42,20 @@ def csv2json():
     json_file = sys.stdout
 
     try:
-        if (args.infile):
+        if args.infile:
             csv_file = open(args.infile, encoding=args.encoding)
 
-        if (args.outfile):
+        if args.outfile:
             json_file = open(args.outfile, encoding="utf-8", mode="w")
 
-        csvReader = csv.DictReader(csv_file, dialect="excel", delimiter=args.delimiter)
+        csv_reader = csv.DictReader(csv_file, dialect="excel", delimiter=args.delimiter)
 
-        jsonArray = []
+        json_array = []
 
-        for row in csvReader:
-            jsonArray.append(row)
+        for row in csv_reader:
+            json_array.append(row)
 
-        json_file.write(json.dumps(jsonArray, indent=2, ensure_ascii=False))
+        json_file.write(json.dumps(json_array, indent=2, ensure_ascii=False))
 
     finally:
         if csv_file is not sys.stdin:
@@ -62,6 +63,7 @@ def csv2json():
 
         if json_file is not sys.stdout:
             json_file.close()
+
 
 def normjson():
     parser = argparse.ArgumentParser(description="Convert input JSON to understood format")
@@ -112,7 +114,8 @@ def normjson():
     output_file = sys.stdout
 
     try:
-        input_file = open(args.input_file, encoding="utf-8") if args.input_file else sys.stdin
+        input_file = open(args.input_file, encoding="utf-8") \
+            if args.input_file else sys.stdin
 
         # Load input
         data = json.loads(input_file.read())
@@ -123,10 +126,13 @@ def normjson():
             BirthdateMapper(**config["keys"])
         ], args.retain_input, args.input_node)
 
-        output = mapper.map(data) if isinstance(data, dict) else list(map(lambda e: mapper.map(e), data))
+        output = mapper.map(data) if isinstance(data, dict) \
+            else [mapper.map(e) for e in data]
 
         try:
-            output_file = open(args.output_file, encoding="utf-8", mode="w") if args.output_file else sys.stdout
+            output_file = open(args.output_file, encoding="utf-8", mode="w") \
+                if args.output_file else sys.stdout
+
             output_file.write(json.dumps(output, indent=2, ensure_ascii=False))
             output_file.write("\n")
         finally:

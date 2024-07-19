@@ -1,15 +1,13 @@
-
-from ..types import ImportedPerson
-from ..dates import fromisoformat, fromplformat
-
+import re
 from typing import Any, Match, Self
 
-import pycasestyle
-import re
+from ..dates import fromisoformat, fromplformat
 
+"""Transform dictonary from one format to another"""
 class Mapper:
     def map(self: Self, data: dict[str, Any]) -> dict[str, Any]:
-        return {}
+        pass
+
 
 class CompositeMapper(Mapper):
     def __init__(self, mappers: list[Mapper], keep_input: bool = False, input_node: str = "") -> None:
@@ -18,20 +16,23 @@ class CompositeMapper(Mapper):
         self.__input_node = input_node
 
     def map(self: Self, data: dict[str, Any]) -> dict[str, Any]:
-        properties = {} if not self.__keep_input else { self.__input_node: data } if self.__input_node else data.copy()
+        properties = {} if not self.__keep_input \
+            else {self.__input_node: data} if self.__input_node \
+            else data.copy()
 
         for mapper in self.__mappers:
             properties.update(mapper.map(data))
 
         return properties
 
+
 class BirthdateMapper(Mapper):
 
     @staticmethod
-    def sanitize_date(str: str) -> str:
+    def sanitize_date(date_string: str) -> str:
         # - remove spaces around dash (-)
         # - strip leading and trailing spaces
-        return re.sub(" *- *", "-", str).strip()
+        return re.sub(" *- *", "-", date_string).strip()
 
     def __init__(self, **kwargs: list[Any]) -> None:
         self.__birthdate = kwargs.get("birthdate", [])
@@ -49,15 +50,22 @@ class BirthdateMapper(Mapper):
             if birth_date:
                 break
 
-        return { "birthdate": birth_date.isoformat() } if birth_date else {}
+        return {"birthdate": birth_date.isoformat()} if birth_date else {}
+
 
 class NameMapper(Mapper):
 
     # Mind the order!
     prepositions = ["de", "da", "di", "von", "van der", "van de", "van"]
 
-    surname_at_start = re.compile(f"^(?P<fullsurname>((?P<preposition>{'|'.join(prepositions)})? )?(?P<surname>[\\w-]+))", re.IGNORECASE)
-    surname_at_end = re.compile(f"(?P<fullsurname>((?P<preposition>{'|'.join(prepositions)})? )?(?P<surname>[\\w-]+))$", re.IGNORECASE)
+    surname_at_start = re.compile(
+        f"^(?P<fullsurname>((?P<preposition>{'|'.join(prepositions)})? )?(?P<surname>[\\w-]+))",
+        re.IGNORECASE
+    )
+    surname_at_end = re.compile(
+        f"(?P<fullsurname>((?P<preposition>{'|'.join(prepositions)})? )?(?P<surname>[\\w-]+))$",
+        re.IGNORECASE
+    )
 
     @staticmethod
     def match_surname_at_start(name: str) -> Match[str] | None:
@@ -68,11 +76,11 @@ class NameMapper(Mapper):
         return NameMapper.surname_at_end.search(name)
 
     @staticmethod
-    def sanitize_name(str: str) -> str:
+    def sanitize_name(name: str) -> str:
         # - replace all repeated white spaces with single space
         # - remove spaces around dash (-) - name joiner
         # - strip leading and trailing spaces
-        return re.sub(" *- *", "-", re.sub("\\s+", " ", str)).strip()
+        return re.sub(" *- *", "-", re.sub("\\s+", " ", name)).strip()
 
     # use jq '.[] | keys' on json to get keys
     def __init__(self, **kwargs: list[Any]) -> None:
@@ -104,7 +112,7 @@ class NameMapper(Mapper):
 
         return properties
 
-    def parse_fullname_1(self: Self, fullname: str, surname_at_end: bool) -> dict[str, str]:
+    def parse_fullname_1(self: Self, fullname: str, surname_at_end: bool) -> dict[str, Any]:
         names = []
 
         if surname_at_end:
@@ -127,7 +135,7 @@ class NameMapper(Mapper):
         if preposition:
             surname = preposition.casefold() + " " + surname
 
-        names = list(map(lambda str: str.capitalize(), names))
+        names = [str.capitalize() for str in names]
 
         return {
             "fullname": " ".join(names) + " " + surname,
@@ -137,7 +145,8 @@ class NameMapper(Mapper):
             "surnames": [surname],
         }
 
-    def parse_fullname(self: Self, fullname: str, extract_names: bool, surname_at_end: bool) -> dict[str, str]:
+    # pylint: disable=C0301
+    def parse_fullname(self: Self, fullname: str, extract_names: bool, surname_at_end: bool) -> dict[str, Any]:
         if not extract_names:
             return {
                 "fullname": fullname
@@ -164,32 +173,34 @@ class NameMapper(Mapper):
 
         return properties
 
-    def parse_names(self: Self, names: str) -> dict[str, str]:
-        parts = list(map(lambda name: name.capitalize(), names.split()))
+    def parse_names(self: Self, names: str) -> dict[str, Any]:
+        parts = [name.capitalize() for name in names.split()]
         return {
             "names": parts,
             "firstname": parts[0]
         }
 
-    def parse_surname(self: Self, name: str) -> dict[str, str]:
+    def parse_surname(self: Self, name: str) -> dict[str, Any]:
         parts = []
 
-        # We use surname matching regex to get preposition, which will be lowered
-        # as opposed to other parts, which will be capitalized
+        # We use surname matching regex to get preposition,
+        # which will be lowered as opposed to other parts,
+        # which will be capitalized
         match = NameMapper.match_surname_at_start(name)
         if match and match.group("preposition"):
             preposition = match.group("preposition").casefold()
             name = name[len(preposition)+1:]
             parts.append(preposition)
 
-        parts.extend(list(map(lambda str: str.capitalize(), name.split())))
+        parts.extend([str.capitalize() for str in name.split()])
+
         surname = " ".join(parts)
         return {
             "surname": surname,
             "surnames": [surname]
         }
 
-    def parse_surnames(self: Self, name: str) -> dict[str, str]:
+    def parse_surnames(self: Self, name: str) -> dict[str, Any]:
         parts = re.split(" vel ", name, flags=re.IGNORECASE)
         surnames = []
         for surname in parts:

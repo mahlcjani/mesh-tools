@@ -1,9 +1,8 @@
-
-from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Self, cast
 
 type Metadata = dict[str, str]
+
 
 class Person:
 
@@ -60,16 +59,17 @@ class Person:
 class PersistedPerson(Person):
     """Person already existing in the system"""
 
-    def __init__(self, id: str, **kwargs: str) -> None:
+    def __init__(self, ident: str, **kwargs: str) -> None:
         super().__init__(**kwargs)
-        self.__id = id
+        self.__ident = ident
 
     def __repr__(self: Self) -> str:
-        return f"{self.__class__.__name__}({self.fullname}/{self.__id}) at {hex(id(self))}"
+        return f"{self.__class__.__name__}({self.fullname}/{self.__ident}) at {hex(id(self))}"
 
     @property
-    def id(self) -> str:
-        return self.__id
+    def ident(self) -> str:
+        return self.__ident
+
 
 class ImportedPerson(Person):
     """Imported person"""
@@ -82,6 +82,7 @@ class ImportedPerson(Person):
     def resolved(self, r: Any) -> None:
         assert r.source == self
         self.__resolved = r
+
 
 class ResolvedPerson:
 
@@ -101,17 +102,20 @@ class ResolvedPerson:
     def target(self: Self) -> str:
         return self.__target
 
+
 class ResolvedExistingPerson(ResolvedPerson):
     def __init__(self, source: ImportedPerson, target: PersistedPerson):
         super().__init__(source, target.id)
-        self.__targetPerson = target
+        self.__target_person = target
 
     @property
-    def targetPerson(self: Self) -> PersistedPerson:
-        return self.__targetPerson
+    def target_person(self: Self) -> PersistedPerson:
+        return self.__target_person
+
 
 class PersonId:
     pass
+
 
 class PersonResolver:
     def find_person(self: Self, person: ImportedPerson) -> PersistedPerson | None:
@@ -127,11 +131,9 @@ class PersonResolver:
 
         # we may find similar persons, maybe we do not have
 
-
-        return ResolvedPerson(person, id)
+        return ResolvedPerson(person, "person_id")
 
     def persist(self: Self, person: ResolvedPerson) -> ResolvedExistingPerson:
-
         return ResolvedExistingPerson(
             person.source,
             PersistedPerson(
