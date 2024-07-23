@@ -1,5 +1,5 @@
 
-[keys]
+[keys.names]
 
 fullname = [
     { name = "Imiona i nazwisko", surname_at_end = true, extract_names = true },
@@ -16,6 +16,13 @@ surname = [
     { name = "lastName" }
 ]
 
+[keys.dates]
+
 birthdate = [
-    { name = "birthDate" }
+    "birthDate",
+    "Data urodzenia"
 ]
+
+
+# Potential enhanced syntax if date is a part of complex field
+# { name = "Data i miejsce urodzenia", date_at_end = false}
