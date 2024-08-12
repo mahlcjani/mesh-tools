@@ -1,28 +1,50 @@
+
+from functools import reduce
 from typing import Any, Protocol, Self
 
 
-# Attributes are just an alias for dictionary
-type Attributes = dict[str, Any]
+# Properties is just an alias for dictionary
+type Properties = dict[str, Any]
 
 
-class Mapper(Protocol):
-    """Transform dictonary from one format to another"""
-    def map(self: Self, data: Attributes) -> Attributes:
+class PropertiesFilter(Protocol):
+    """Transform dictionary from one format to another"""
+
+    def filter(self: Self, data: Properties) -> Properties:
         pass
 
 
-class CompositeMapper(Mapper):
-    def __init__(self, mappers: list[Mapper], keep_input: bool = False, input_node: str = "") -> None:
-        self.__mappers = mappers
-        self.__keep_input = keep_input
-        self.__input_node = input_node
+class ValueMapper(Protocol):
+    """Convert value to another value"""
 
-    def map(self: Self, data: dict[str, Any]) -> dict[str, Any]:
-        properties = {} if not self.__keep_input \
-            else {self.__input_node: data} if self.__input_node \
-            else data.copy()
+    def map(self: Self, value: Any) -> Any:
+        pass
 
-        for mapper in self.__mappers:
-            properties.update(mapper.map(data))
 
+class SimpleFilter(PropertiesFilter):
+    """Pick a property and apply value mapping"""
+
+    # def __init__(self: Self, name: str, mappers: list[ValueMapper], to: str) -> None:
+    def __init__(self: Self, name: str, **kwargs: Any) -> None:
+        self._name = name
+        self._rename_to = kwargs.get("rename_to", name)
+        self._mappers = kwargs.get("apply", [])
+
+    def filter(self: Self, data: Properties) -> Properties:
+        property = data.get(self._name)
+        return {
+            self._rename_to: reduce(lambda v, m: m.map(v), self._mappers, property)
+        } if property else {}
+
+
+class FilterChain(PropertiesFilter):
+    """Simple filter act on single property, this chain allows for filtering more properties."""
+
+    def __init__(self: Self, filters: list[PropertiesFilter]) -> None:
+        self._filters = filters
+
+    def filter(self: Self, data: Properties) -> Properties:
+        properties = data
+        for filter in self._filters:
+            properties.update(filter.filter(properties))
         return properties

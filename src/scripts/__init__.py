@@ -4,7 +4,16 @@ import json
 import sys
 import tomllib
 
-from ..mapping.names import CompositeMapper, BirthdateMapper, NameMapper
+from typing import Any
+
+from ..mapping.basic import IntProperty
+from ..mapping.dates import DateFilter
+from ..mapping.mapper import PropertiesFilter, FilterChain
+from ..mapping.names import \
+    FullnameBuilder, \
+    FullnameFilter, \
+    NamesFilter, \
+    SurnameFilter
 
 
 def csv2json():
@@ -65,7 +74,7 @@ def csv2json():
             json_file.close()
 
 
-def normjson():
+def filterjson():
     parser = argparse.ArgumentParser(description="Convert input JSON to understood format")
     parser.add_argument(
         "-i", "--input-file",
@@ -86,16 +95,17 @@ def normjson():
         help="path to config file with instructions"
     )
     parser.add_argument(
+        "-f", "--filter",
+        dest="filters",
+        default=[],
+        action="append",
+        help="add filter and it's config in form filtername=property,options"
+    )
+    parser.add_argument(
         "-s", "--retain-input",
         dest="retain_input",
         action="store_true",
         help="should input be retained"
-    )
-    parser.add_argument(
-        "-n", "--retain-input-node",
-        dest="input_node",
-        action="store",
-        help="node name under which to retain input"
     )
 
     args = parser.parse_args()
@@ -108,7 +118,11 @@ def normjson():
         with open(args.config_file, mode="rb") as config_file:
             config.update(tomllib.load(config_file))
 
-    # TODO: merge command line arguments into config
+    # Create filer
+    filter = FilterChain(
+        filters_from_cmdline(args.filters) +
+        filters_from_config(config.get("filter", dict()))
+    )
 
     input_file = sys.stdin
     output_file = sys.stdout
@@ -120,14 +134,8 @@ def normjson():
         # Load input
         data = json.loads(input_file.read())
 
-        # Create mapper
-        mapper = CompositeMapper([
-            NameMapper(**config["keys"]),
-            BirthdateMapper(**config["keys"])
-        ], args.retain_input, args.input_node)
-
-        output = mapper.map(data) if isinstance(data, dict) \
-            else [mapper.map(e) for e in data]
+        output = filter.filter(data) if isinstance(data, dict) \
+            else [filter.filter(e) for e in data]
 
         try:
             output_file = open(args.output_file, encoding="utf-8", mode="w") \
@@ -142,3 +150,28 @@ def normjson():
     finally:
         if input_file is not sys.stdin:
             input_file.close()
+
+
+def filters_from_config(config: dict[str, Any]) -> list[PropertiesFilter]:
+    mappers = []
+
+    fullnameMapperConfigs = config.get("fullname", dict())
+    for name, c in fullnameMapperConfigs.items():
+        mappers.append(FullnameFilter(name, **c))
+
+    dateMapperConfigs = config.get("date", dict())
+    for name, c in dateMapperConfigs.items():
+        mappers.append(DateFilter(name, **c))
+
+    return mappers
+
+
+def filters_from_cmdline(filters: list[str]) -> list[PropertiesFilter]:
+    mappers = []
+
+    for filter_config in filters:
+        filter, property, string_opts, *_ = filter_config.split(":")
+        opts = tomllib.loads(f"opts={{{string_opts}}}")["opts"]
+        mappers.append(globals()[filter](property, **opts))
+
+    return mappers

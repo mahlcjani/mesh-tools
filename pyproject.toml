@@ -18,7 +18,7 @@ classifiers = [
 
 [project.scripts]
 csv2json = "meshtools.scripts:csv2json"
-normjson = "meshtools.scripts:normjson"
+filterjson = "meshtools.scripts:filterjson"
 
 [project.urls]
 Homepage = "https://github.com/mahlcjani/mesh-tools"

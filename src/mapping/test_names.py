@@ -1,7 +1,8 @@
 from unittest import TestCase
 import pytest
 
-from .names import NameMapper
+from .mapper import FilterChain
+from .names import FullnameBuilder, FullnameFilter, match_surname_at_end, match_surname_at_start
 
 
 @pytest.fixture
@@ -9,7 +10,7 @@ def samples():
     return [
         {
             "in": {
-                "fullname": "vincent willem van gogh"
+                "name": "vincent willem van gogh"
             },
             "out": {
                 "firstname": "Vincent",
@@ -21,7 +22,7 @@ def samples():
         },
         {
             "in": {
-                "fullname": "ludwig van der berg"
+                "name": "ludwig van der berg"
             },
             "out": {
                 "firstname": "Ludwig",
@@ -33,7 +34,7 @@ def samples():
         },
         {
             "in": {
-                "fullname": "JOE Peter SMITH vel jaMEs"
+                "name": "JOE Peter SMITH vel jaMEs"
             },
             "out": {
                 "firstname": "Joe",
@@ -46,15 +47,25 @@ def samples():
     ]
 
 
-def test_name_mapper(samples):
-    mapper = NameMapper(fullname=[{"name": "fullname"}])
+def test_fullname_filter(samples):
+    filter = FilterChain([
+        FullnameFilter(
+            "name",
+            surname_at_end=True,
+            names="names",
+            firstname="firstname",
+            surnames="surnames",
+            surname="surname"
+        ),
+        FullnameBuilder("fullname")
+    ])
 
     for sample in samples:
-        TestCase().assertDictEqual(sample["out"], mapper.map(sample["in"]))
+        TestCase().assertDictEqual(sample["out"], filter.filter(sample["in"]))
 
 
 def test_match_surname_at_start():
-    match = NameMapper.match_surname_at_start("Sur-Name FirstName SecondName")
+    match = match_surname_at_start("Sur-Name FirstName SecondName")
     assert match
     assert match.group("surname") == "Sur-Name"
     assert match.group("preposition") is None
@@ -63,7 +74,7 @@ def test_match_surname_at_start():
 
 
 def test_match_surname_at_end():
-    match = NameMapper.match_surname_at_end("FirstName SecondName van de Sur-Name")
+    match = match_surname_at_end("FirstName SecondName van de Sur-Name")
     assert match
     assert match.group("surname") == "Sur-Name"
     assert match.group("preposition") == "van de"

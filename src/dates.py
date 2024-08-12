@@ -20,7 +20,7 @@ def plformat(dt: date) -> str:
 
 
 def frompesel(pesel: str) -> date:
-    # naive - assert length and all digits
+    # TODO - assert length and all digits
     assert len(pesel) == 11
     year = int(pesel[0:2])
     month = int(pesel[2:4])

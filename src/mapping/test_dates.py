@@ -1,7 +1,8 @@
 from unittest import TestCase
 import pytest
 
-from .dates import DateMapper
+from .dates import DateFilter
+from .mapper import FilterChain
 
 
 @pytest.fixture
@@ -34,8 +35,11 @@ def samples():
     ]
 
 
-def test_name_mapper(samples):
-    mapper = DateMapper(date=["dateField", "Data"])
+def test_date_filter(samples):
+    filter = FilterChain([
+        DateFilter("dateField", name="date"),
+        DateFilter("Data", name="date")
+    ])
 
     for sample in samples:
-        TestCase().assertDictEqual(sample["out"], mapper.map(sample["in"]))
+        TestCase().assertDictEqual(sample["out"], filter.filter(sample["in"]))

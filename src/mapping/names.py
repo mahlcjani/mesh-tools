@@ -1,192 +1,210 @@
 import re
-from typing import Any, Match, Self
-
-from ..dates import fromisoformat, fromplformat
-
-"""Transform dictonary from one format to another"""
-class Mapper:
-    def map(self: Self, data: dict[str, Any]) -> dict[str, Any]:
-        pass
+from typing import Any, Match, Self, Tuple
+from .mapper import Properties, PropertiesFilter
 
 
-class CompositeMapper(Mapper):
-    def __init__(self, mappers: list[Mapper], keep_input: bool = False, input_node: str = "") -> None:
-        self.__mappers = mappers
-        self.__keep_input = keep_input
-        self.__input_node = input_node
-
-    def map(self: Self, data: dict[str, Any]) -> dict[str, Any]:
-        properties = {} if not self.__keep_input \
-            else {self.__input_node: data} if self.__input_node \
-            else data.copy()
-
-        for mapper in self.__mappers:
-            properties.update(mapper.map(data))
-
-        return properties
+def sanitize_name(name: str) -> str:
+    # - replace all repeated white spaces with single space
+    # - remove spaces around dash (-) - name joiner
+    # - strip leading and trailing spaces
+    return re.sub(" *- *", "-", re.sub("\\s+", " ", name)).strip()
 
 
-class BirthdateMapper(Mapper):
+# Mind the order!
+prepositions = ["da", "de", "di", "van der", "van de", "van", "von"]
 
-    @staticmethod
-    def sanitize_date(date_string: str) -> str:
-        # - remove spaces around dash (-)
-        # - strip leading and trailing spaces
-        return re.sub(" *- *", "-", date_string).strip()
+surname_at_start = re.compile(
+    f"^(?P<fullsurname>((?P<preposition>{'|'.join(prepositions)})? )?(?P<surname>[\\w-]+))",
+    re.IGNORECASE
+)
 
-    def __init__(self, **kwargs: list[Any]) -> None:
-        self.__birthdate = kwargs.get("birthdate", [])
-
-    def map(self: Self, data: dict[str, Any]) -> dict[str, Any]:
-        birth_date = None
-
-        for key in self.__birthdate:
-            if key["name"] in data:
-                datestr = BirthdateMapper.sanitize_date(data[key["name"]])
-                birth_date = fromisoformat(datestr)
-                if not birth_date:
-                    birth_date = fromplformat(datestr)
-
-            if birth_date:
-                break
-
-        return {"birthdate": birth_date.isoformat()} if birth_date else {}
+surname_at_end = re.compile(
+    f"(?P<fullsurname>((?P<preposition>{'|'.join(prepositions)})? )?(?P<surname>[\\w-]+))$",
+    re.IGNORECASE
+)
 
 
-class NameMapper(Mapper):
+def match_surname_at_start(name: str) -> Match[str] | None:
+    return surname_at_start.search(name)
 
-    # Mind the order!
-    prepositions = ["de", "da", "di", "von", "van der", "van de", "van"]
 
-    surname_at_start = re.compile(
-        f"^(?P<fullsurname>((?P<preposition>{'|'.join(prepositions)})? )?(?P<surname>[\\w-]+))",
-        re.IGNORECASE
-    )
-    surname_at_end = re.compile(
-        f"(?P<fullsurname>((?P<preposition>{'|'.join(prepositions)})? )?(?P<surname>[\\w-]+))$",
-        re.IGNORECASE
-    )
+def match_surname_at_end(name: str) -> Match[str] | None:
+    return surname_at_end.search(name)
 
-    @staticmethod
-    def match_surname_at_start(name: str) -> Match[str] | None:
-        return NameMapper.surname_at_start.search(name)
 
-    @staticmethod
-    def match_surname_at_end(name: str) -> Match[str] | None:
-        return NameMapper.surname_at_end.search(name)
+class NamesFilter(PropertiesFilter):
+    """Filter string names into firstname and array of names"""
 
-    @staticmethod
-    def sanitize_name(name: str) -> str:
-        # - replace all repeated white spaces with single space
-        # - remove spaces around dash (-) - name joiner
-        # - strip leading and trailing spaces
-        return re.sub(" *- *", "-", re.sub("\\s+", " ", name)).strip()
+    def __init__(self: Self, name: str, **kwargs: str) -> None:
+        # property name to parse
+        self._name = name
+        # properties to write
+        # - parsed names
+        self._names = kwargs.get("names", "names")
+        # - parsed firstname
+        self._firstname = kwargs.get("firstname", "firstname")
+
+    def filter(self: Self, data: Properties) -> Properties:
+        name = data.pop(self._name, None)
+        if not name:
+            return {}
+
+        names = self.parse_names(sanitize_name(name))
+        return {
+            self._names: names,
+            self._firstname: names[0],
+        }
+
+    def parse_names(self: Self, names: str) -> list[str]:
+        return [name.capitalize() for name in names.split()]
+
+
+class SurnameFilter(PropertiesFilter):
+    """Filter surname into surname and array of surnames properties"""
+
+    def __init__(self: Self, name: str, **kwargs: str) -> None:
+        # property name to parse
+        self._name = name
+        # properties to write
+        # - parsed surnames
+        self._surnames = kwargs.get("surnames", "surnames")
+        # - parsed main surname
+        self._surname = kwargs.get("surname", "surname")
+
+    def filter(self: Self, data: Properties) -> Properties:
+        name = data.pop(self._name, None)
+        if not name:
+            return {}
+
+        surnames = self.parse_surnames(sanitize_name(name))
+        return {
+            self._surname: surnames[0],
+            self._surnames: surnames,
+        }
+
+    def parse_surname(self: Self, name: str) -> str:
+        parts = []
+
+        # We use surname matching regex to get preposition,
+        # which will be lowered as opposed to other parts,
+        # which will be capitalized
+        match = match_surname_at_start(name)
+        if match and match.group("preposition"):
+            preposition = match.group("preposition").casefold()
+            name = name[len(preposition)+1:]
+            parts.append(preposition)
+
+        parts.extend([str.capitalize() for str in name.split()])
+        return " ".join(parts)
+
+    def parse_surnames(self: Self, name: str) -> list[str]:
+        return list(map(self.parse_surname, re.split(" vel ", name, flags=re.IGNORECASE)))
+
+
+class FullnameFilter(PropertiesFilter):
+    """
+        Filter person's full name into component (names, firstname, surnames).
+        Seems jq alone and with functions is impossible to do this job.
+    """
 
     # use jq '.[] | keys' on json to get keys
-    def __init__(self, **kwargs: list[Any]) -> None:
-        self.__names = kwargs.get("names", [])
-        self.__surname = kwargs.get("surname", [])
-        self.__fullname = kwargs.get("fullname", [])
+    def __init__(self: Self, name: str, **kwargs: Any) -> None:
+        # property name to parse
+        self._name = name
+        # is surname at the end of parsed proprty
+        self._surname_at_end = kwargs.get("surname_at_end", True)
+        # properties to write
+        # - normalized full name
+        self._fullname = kwargs.get("fullname", "fullname")
+        # - parsed names
+        self._names = kwargs.get("names", "names")
+        # - parsed firstname
+        self._firstname = kwargs.get("firstname", "firstname")
+        # - parsed surnames
+        self._surnames = kwargs.get("surnames", "surnames")
+        # - parsed main surname
+        self._surname = kwargs.get("surname", "surname")
 
-    def map(self: Self, data: dict[str, Any]) -> dict[str, Any]:
+        self._names_mapper = NamesFilter(None, firstname=self._firstname, names=self._names)
+        self._surname_mapper = SurnameFilter(None, surname=self._surname, surnames=self._surnames)
+
+    def filter(self: Self, data: Properties) -> Properties:
+        fullname = data.pop(self._name, None)
+        if not fullname:
+            return {}
+
+        (surnames, names) = self.parse_fullname(sanitize_name(fullname))
+
         properties = {}
 
-        for key in self.__fullname:
-            if key["name"] in data:
-                fullname = NameMapper.sanitize_name(data[key["name"]])
-                extract_names = bool(key.get("extract_names", True))
-                surname_at_end = key.get("surname_at_end", True)
-                properties.update(self.parse_fullname(fullname, extract_names, surname_at_end))
-                # For now first found key wins
-                break
+        if len(names):
+            properties.update({
+                self._names: names,
+                self._firstname: names[0],
+            })
 
-        for key in self.__names:
-            if key["name"] in data:
-                properties.update(self.parse_names(NameMapper.sanitize_name(data[key["name"]])))
-                break
-
-        for key in self.__surname:
-            if key["name"] in data:
-                properties.update(self.parse_surnames(NameMapper.sanitize_name(data[key["name"]])))
-                break
+        if len(surnames):
+            properties.update({
+                self._surname: surnames[0],
+                self._surnames: surnames,
+            })
 
         return properties
 
-    def parse_fullname_1(self: Self, fullname: str, surname_at_end: bool) -> dict[str, Any]:
+    def parse_fullname_1(self: Self, fullname: str) -> Tuple[str, list[str]]:
         names = []
 
-        if surname_at_end:
+        if self._surname_at_end:
             # name [name...] [preposition] surname
-            match = NameMapper.match_surname_at_end(fullname)
+            match = match_surname_at_end(fullname)
             if not match:
-                return { "fullname": fullname }
+                return ([], [])
 
-            names = match.string[0:match.start()].split()
+            names = match.string[0:match.start()]
         else:
             # [preposition] surname name [name...]
-            match = NameMapper.match_surname_at_start(fullname)
+            match = match_surname_at_start(fullname)
             if not match:
-                return { "fullname": fullname }
+                return ([], [])
 
-            names = match.string[match.end():].split()
+            names = match.string[match.end():]
 
         surname = match.group("surname").capitalize()
         preposition = match.group("preposition")
         if preposition:
             surname = preposition.casefold() + " " + surname
 
-        names = [str.capitalize() for str in names]
-
-        return {
-            "fullname": " ".join(names) + " " + surname,
-            "names": names,
-            "firstname": names[0],
-            "surname": surname,
-            "surnames": [surname],
-        }
+        return (surname, self._names_mapper.parse_names(names))
 
     # pylint: disable=C0301
-    def parse_fullname(self: Self, fullname: str, extract_names: bool, surname_at_end: bool) -> dict[str, Any]:
-        if not extract_names:
-            return {
-                "fullname": fullname
-            }
-
+    def parse_fullname(self: Self, fullname: str) -> Tuple[list[str], list[str]]:
         parts = re.split(" vel ", fullname, flags=re.IGNORECASE)
 
-        properties = {}
+        surnames = []
+        names = []
 
-        if surname_at_end:
-            properties.update(self.parse_fullname_1(parts[0], surname_at_end))
+        if self._surname_at_end:
+            (s, n) = self.parse_fullname_1(parts[0])
+            surnames.append(s)
+            names.extend(n)
             for surname in parts[1:]:
-                properties["surnames"].append(self.parse_surname(surname)["surname"])
+                surnames.append(self._surname_mapper.parse_surname(surname))
         else:
-            properties.update(self.parse_fullname_1(parts[-1], surname_at_end))
+            (s, n) = self.parse_fullname_1(parts[-1])
+            surnames.append(s)
+            names.extend(n)
             for surname in parts[0:-1]:
-                properties["surnames"].append(self.parse_surname(surname)["surname"])
+                surnames.append(self._surname_mapper.parse_surname(surname))
 
-        surnames = properties["surnames"]
-        if len(surnames) > 1:
-            properties.update({
-                "fullname": " ".join(properties["names"]) + " " + " vel ".join(surnames)
-            })
+        return (surnames, names)
 
-        return properties
-
-    def parse_names(self: Self, names: str) -> dict[str, Any]:
-        parts = [name.capitalize() for name in names.split()]
-        return {
-            "names": parts,
-            "firstname": parts[0]
-        }
-
-    def parse_surname(self: Self, name: str) -> dict[str, Any]:
+    def parse_surname(self: Self, name: str) -> Properties:
         parts = []
 
         # We use surname matching regex to get preposition,
         # which will be lowered as opposed to other parts,
         # which will be capitalized
-        match = NameMapper.match_surname_at_start(name)
+        match = match_surname_at_start(name)
         if match and match.group("preposition"):
             preposition = match.group("preposition").casefold()
             name = name[len(preposition)+1:]
@@ -200,7 +218,7 @@ class NameMapper(Mapper):
             "surnames": [surname]
         }
 
-    def parse_surnames(self: Self, name: str) -> dict[str, Any]:
+    def parse_surnames(self: Self, name: str) -> Properties:
         parts = re.split(" vel ", name, flags=re.IGNORECASE)
         surnames = []
         for surname in parts:
@@ -210,3 +228,23 @@ class NameMapper(Mapper):
             "surnames": surnames,
             "surname": surnames[0]
         }
+
+
+class FullnameBuilder(PropertiesFilter):
+    """Format person's full name from names and surnames."""
+
+    # use jq '.[] | keys' on json to get keys
+    def __init__(self: Self, name: str, **kwargs: Any) -> None:
+        # property name to create
+        self._name = name
+        self._names = kwargs.get("names", "names")
+        self._surnames = kwargs.get("surnames", "surnames")
+
+    def filter(self: Self, data: Properties) -> Properties:
+        names = data.get(self._names)
+        surnames = data.get(self._surnames)
+        # It seems to make sense to create full name only if both
+        # names and surnames are not empty
+        return {
+            self._name: " ".join(names) + " " + " vel ".join(surnames)
+        } if len(names) and len(surnames) else {}
