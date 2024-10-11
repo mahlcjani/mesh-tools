@@ -10,6 +10,14 @@ def sanitize_name(name: str) -> str:
     return re.sub(" *- *", "-", re.sub("\\s+", " ", name)).strip()
 
 
+def capitalize_name(name: str) -> str:
+    return "-".join([s.capitalize() for s in name.split("-")])
+
+
+def capitalize_names(names: str) -> list[str]:
+    return [capitalize_name(name) for name in [s for s in names.split()]]
+
+
 # Mind the order!
 prepositions = ["da", "de", "di", "van der", "van de", "van", "von"]
 
@@ -56,7 +64,7 @@ class NamesFilter(PropertiesFilter):
         }
 
     def parse_names(self: Self, names: str) -> list[str]:
-        return [name.capitalize() for name in names.split()]
+        return capitalize_names(names)
 
 
 class SurnameFilter(PropertiesFilter):
@@ -94,7 +102,8 @@ class SurnameFilter(PropertiesFilter):
             name = name[len(preposition)+1:]
             parts.append(preposition)
 
-        parts.extend([str.capitalize() for str in name.split()])
+        parts.extend(capitalize_names(name))
+
         return " ".join(parts)
 
     def parse_surnames(self: Self, name: str) -> list[str]:
@@ -169,7 +178,7 @@ class FullnameFilter(PropertiesFilter):
 
             names = match.string[match.end():]
 
-        surname = match.group("surname").capitalize()
+        surname = capitalize_name(match.group("surname"))
         preposition = match.group("preposition")
         if preposition:
             surname = preposition.casefold() + " " + surname
@@ -210,8 +219,7 @@ class FullnameFilter(PropertiesFilter):
             name = name[len(preposition)+1:]
             parts.append(preposition)
 
-        parts.extend([str.capitalize() for str in name.split()])
-
+        parts.extend(capitalize_names(name))
         surname = " ".join(parts)
         return {
             "surname": surname,

@@ -8,7 +8,10 @@ description = "Tools for dealing with mesh (disclosed)"
 version = "0.0.1"
 requires-python = ">=3.10"
 readme = "README.md"
-dependencies = []
+dependencies = [
+    "neo4j >= 5",
+    "tomlkit"
+]
 authors = [{ name = "Maciej Misiołek", email = "mahlcjani@proton.me" }]
 license = { text = "MIT License" }
 classifiers = [
@@ -17,12 +20,13 @@ classifiers = [
 ]
 
 [project.scripts]
-csv2json = "meshtools.scripts:csv2json"
-filterjson = "meshtools.scripts:filterjson"
+filterjson = "meshtools.scripts.filterjson:filterjson"
+cypher-run = "meshtools.scripts.neo4j:cypher_run"
+import-term = "meshtools.scripts.neo4j:import_term"
 
 [project.urls]
 Homepage = "https://github.com/mahlcjani/mesh-tools"
 
 [tool.setuptools]
 package-dir = { "meshtools" = "src" }
-packages = ["meshtools", "meshtools.mapping", "meshtools.scripts"]
+
