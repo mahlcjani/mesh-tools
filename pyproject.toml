@@ -22,7 +22,8 @@ classifiers = [
 [project.scripts]
 filterjson = "meshtools.scripts.filterjson:filterjson"
 cypher-run = "meshtools.scripts.neo4j:cypher_run"
-import-term = "meshtools.scripts.neo4j:import_term"
+mesh-import = "meshtools.scripts.neo4j:import_data"
+mesh-data = "meshtools.scripts.neo4j:manage_data"
 
 [project.urls]
 Homepage = "https://github.com/mahlcjani/mesh-tools"

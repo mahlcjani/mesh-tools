@@ -1,3 +1,5 @@
+import json
+
 from dataclasses import dataclass
 from typing import Any, Protocol, Self
 
@@ -27,26 +29,29 @@ class Contains(ObjectKeys):
 class Storage(Protocol):
     """To abstract storage and relation types"""
 
-    # def __init__(self: Self, namespace: str) -> None:
-    #     self.namespace = namespace
-
-    def init_namespace(self: Self, namespace: str, clean: bool = False) -> None:
-        pass
-
-    def match(self: Self, namespace: str, keys: ObjectId | ObjectKeys) -> ObjectId:
-        """"Verify existance of unique object of given ID or keys in context of specified namespace"""
+    def match(self: Self, keys: ObjectId | ObjectKeys) -> ObjectId:
+        """"Verify existance of unique object of given ID or keys"""
         return None
 
     # match_all
     # match_any
 
-    def create(self: Self, namespace: str, type: str, name: str, data: Any) -> ObjectId:
+    def create(self: Self, type: str, name: str, data: Any) -> ObjectId:
+        """Create new node"""
         pass
 
-    def merge(self: Self, namespace: str, type: str, name: str, data: Any) -> ObjectId:
+    def merge(self: Self, type: str, name: str, data: Any) -> ObjectId:
+        """Create or update node if such exists (using name as the key)"""
         pass
 
-    def join(self: Self, namespace: str, whole: ObjectId | ObjectKeys, part: ObjectId | ObjectKeys) -> None:
+    def merge_nodes(self: Self, nodelist: list[ObjectId]) -> ObjectId:
+        """Merge existing nodes into new one"""
+        pass
+
+    def join(self: Self, whole: ObjectId | ObjectKeys, part: ObjectId | ObjectKeys) -> None:
+        pass
+
+    def find_duplicates(self: Self, type: str) -> list[dict[str, Any]]:
         pass
 
 
@@ -56,41 +61,57 @@ class DataEngine:
     """
     def __init__(self: Self, storage: Storage) -> None:
         self.storage = storage
-        # Default namespace
-        self.namespace = ""
-
-    def use_namespace(self: Self, name: str, erase: bool = False) -> Self:
-        self.storage.init_namespace(name, erase)
-        engine = DataEngine(self.storage)
-        engine.namespace = name
-        return engine
 
     def match(self: Self, keys: ObjectId | ObjectKeys) -> ObjectId:
-        return ObjectId(keys.type, self.storage.match(self.namespace, keys))
+        return ObjectId(keys.type, self.storage.match(keys))
 
-    def insert(self: Self, type: str, name: str, data: Any) -> ObjectId:
-        print("insert", type, name)
-        return ObjectId(type, self.storage.create(self.namespace, type, name, data))
+    def insert(self: Self, type: str, name: str, data: Any = dict()) -> ObjectId:
+        return self.storage.create(type, name, data)
 
-    def upsert(self: Self, type: str, name: str, data: Any) -> ObjectId:
-        print("upsert", type, name)
-        return ObjectId(type, self.storage.merge(self.namespace, type, name, data))
+    def upsert(self: Self, type: str, name: str, data: Any = dict()) -> ObjectId:
+        return self.storage.merge(type, name, data)
+
+    def merge(self: Self, nodelist: list[ObjectId]) -> ObjectId:
+        return self.storage.merge_nodes(nodelist)
 
     def join(self: Self, whole: ObjectId | ObjectKeys, part: ObjectId | ObjectKeys) -> None:
         """Create whole-part (parent-child) relation"""
-        print("join", whole, part)
-        self.storage.join(self.namespace, whole, part)
+        self.storage.join(whole, part)
 
-    def prepare(self: Self, file: str) -> None:
-        """Prepare to merge namespace into default namespace,
-          creates file for conflict resolution"""
-        pass
+#    def join(self: Self, whole: ObjectId | ObjectKeys, type: str, name: str, data: Any = dict()) -> ObjectId:
+#        self.storage.join(whole, part)
 
-    def resolve(self: Self, file: str) -> None:
-        """Resolve conficts interactively """
-        pass
+    def report_duplicates(self: Self, type: str) -> None:
+        """Prepare to merge nodes of the same names"""
 
-    def merge(self: Self, file: str) -> None:
-        """Merge namespaces after conflicts are resolved"""
-        pass
+        last_name = None
+
+        def callback(node_id, node, memberships):
+            nonlocal last_name
+            name = node.get("name")
+            birth_year = node.get("birthYear")
+            domicile = node.get("domicile")
+            profession = node.get("profession")
+            if not last_name or name != last_name:
+                if last_name:
+                    print()
+                    print("---")
+                    print()
+                print(name)
+                print()
+                last_name = name
+
+            print("?", node_id)
+            print(name, birth_year if birth_year else "")
+            print(", ".join(profession))
+            print(", ".join(domicile))
+            print(", ".join(memberships))
+
+            for source in node.get("@sources"):
+                record = json.loads(source)
+                print()
+                print(" ", record.get("source"))
+                print(json.dumps(record.get("data"), indent=4, ensure_ascii=False)[1:-1])
+
+        self.storage.find_duplicates(type, callback)
 
