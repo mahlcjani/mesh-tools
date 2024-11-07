@@ -255,4 +255,4 @@ class FullnameBuilder(PropertiesFilter):
         # names and surnames are not empty
         return {
             self._name: " ".join(names) + " " + " vel ".join(surnames)
-        } if len(names) and len(surnames) else {}
+        } if names and len(names) and surnames and len(surnames) else {}

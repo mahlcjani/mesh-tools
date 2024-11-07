@@ -6,7 +6,7 @@ import shutil
 from neo4j import GraphDatabase
 from typing import Any, Self
 
-from meshtools.construct.engine import Contains, ObjectId, ObjectKeys, DataEngine
+from meshtools.construct.engine import Contains, LinkedObject, ObjectId, ObjectKeys, DataEngine
 from .merger import Merger
 
 
@@ -151,9 +151,8 @@ def import_data() -> None:
                     import_elections(engine, args.path, elections_name=args.elections_name)
                 case "local-elections":
                     import_elections(engine, args.path, elections_name=args.elections_name)
-                case "duplicates":
-                    engine.report_duplicates("Person")
-
+                case "eu-elections":
+                    import_elections(engine, args.path, elections_name=args.elections_name)
 
 
 def import_chamber_term(engine: DataEngine, directory: str, **kwargs: str) -> None:
@@ -306,11 +305,17 @@ def manage_data() -> None:
         help="what to do"
     )
 
-    # Shared arguments
     parser.add_argument(
         "-p", "--path",
         dest="path",
         action="store",
+        help="Directory or file containing data to import"
+    )
+    parser.add_argument(
+        "-s", "--with-sources",
+        dest="with_sources",
+        action="store_true",
+        default=False,
         help="Directory or file containing data to import"
     )
     parser.add_argument(
@@ -349,14 +354,50 @@ def manage_data() -> None:
 
             match args.command:
                 case "report-duplicates":
-                    engine.report_duplicates("Person")
+                    report_duplicates(engine, args.with_sources)
                 case "resolve-duplicates":
                     resolve_duplicates(engine, args.path)
 
 
+def report_duplicates(engine: DataEngine, with_sources: bool) -> None:
+    def print_duplicates(name: str, count: int, objects: list[LinkedObject]) -> None:
+        print("---", name, count)
+        print()
+
+        first_object = True
+        for ((node_id, node), links) in objects:
+            name = node.get("name")
+            birth_year = node.get("birthYear")
+            domicile = node.get("domicile")
+            profession = node.get("profession")
+
+            print("&" if first_object else "^", node_id.id)
+            first_object = False
+
+            print(" ", name, birth_year if birth_year else "")
+            # need to figure it out why after nodes are merged [] is converted to flat property
+            if profession:
+                print(" ", ", ".join([profession] if isinstance(profession, str) else profession))
+            if domicile:
+                print(" ", ", ".join([domicile] if isinstance(domicile, str) else domicile))
+            if links:
+                print(" ", ", ".join([link.get("name") for link in links]))
+            print()
+
+            for source in node.get("@sources"):
+                record = json.loads(source)
+                print("  -", record.get("source"))
+                if with_sources:
+                    print(json.dumps(record.get("data"), indent=6, ensure_ascii=False)[1:-1])
+
+            print()
+
+    engine.find_duplicates("Person", print_duplicates)
+
+
 def resolve_duplicates(engine: DataEngine, path: str, **kwargs: str) -> None:
     def merge_nodes(nodes: list[str]) -> None:
-        if nodes:
+        if nodes and len(nodes) > 1:
             engine.merge([ObjectId("Person", id) for id in nodes])
             nodes.clear()
 

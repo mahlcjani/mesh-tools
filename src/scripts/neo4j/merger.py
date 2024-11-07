@@ -1,7 +1,9 @@
+from collections.abc import Callable
 from neo4j import Session, Transaction
 from neo4j.exceptions import ResultNotSingleError
 from typing import Any, Self
-from meshtools.construct.engine import Contains, ObjectId, ObjectKeys, Storage
+from meshtools.construct.engine \
+    import Contains, LinkedObject, Object, ObjectId, ObjectKeys, PersistedObject, Storage
 
 
 class Merger(Storage):
@@ -13,8 +15,8 @@ class Merger(Storage):
 
     def match(self: Self, keys: ObjectId | ObjectKeys) -> ObjectId | None:
         try:
-            return self.session.execute_read(match_by_id, keys) if isinstance(keys, ObjectId) \
-                else self.session.execute_read(match_by_keys, keys)
+            return ObjectId(keys.type, self.session.execute_read(match_by_id, keys)) if isinstance(keys, ObjectId) \
+                else ObjectId(keys.type, self.session.execute_read(match_by_keys, keys))
         except ResultNotSingleError:
             return None
 
@@ -24,7 +26,7 @@ class Merger(Storage):
     def merge(self: Self, type: str, name: str, data: Any) -> ObjectId:
         return ObjectId(type, self.session.execute_write(merge_node, type, name, data))
 
-    def merge_nodes(self: Self, nodelist: list[ObjectId]) -> ObjectId:
+    def merge_objects(self: Self, nodelist: list[ObjectId]) -> ObjectId:
         def run(tx: Transaction) -> str:
             return tx.run(
                 """
@@ -50,8 +52,19 @@ class Merger(Storage):
     def join(self: Self, whole: ObjectId | ObjectKeys, part: ObjectId | ObjectKeys) -> None:
         return self.session.execute_write(join_nodes, whole, part)
 
-    def find_duplicates(self: Self, type: str, callback: callable) -> list[dict[str, Any]]:
-        return self.session.execute_read(find_duplicate_nodes, type, callback)
+    def find_duplicates(
+        self: Self,
+        type: str,
+        callback: Callable[[str, int, list[LinkedObject]], None] | None = None
+    ) -> list[tuple[str, int, list[LinkedObject]]] | None:
+        duplicates = []
+
+        def aggregator(name: str, count: int, objects: list[LinkedObject]):
+            duplicates.append([name, count, objects])
+
+        self.session.execute_read(find_duplicate_nodes, type, callback if callback else aggregator)
+
+        return None if callback else duplicates
 
 
 RELATIONS = [
@@ -163,21 +176,44 @@ def join_nodes(tx: Transaction, whole: ObjectId | ObjectKeys, part: ObjectId | O
     ).consume()
 
 
-def find_duplicate_nodes(tx: Transaction, type: str, consumer: callable) -> list[dict[str, Any]]:
+def find_duplicate_nodes(
+    tx: Transaction, type: str, callback: Callable[[str, int, list[LinkedObject]], None]
+) -> None:
+
     result = tx.run(f"""
-        MATCH (n:{type}) WHERE COUNT {{
-            MATCH (m:{type} {{ name: n.name }}) }} > 1
-        OPTIONAL MATCH (n)-[:member_of]->(m)
-        RETURN elementId(n) AS id,
-            n.name AS name,
-            n AS node,
-            COLLECT(m.name) AS memberships
+        MATCH (n:{type})
+        WITH n.name AS name, count(n.name) AS count
+        WHERE count > 1
+
+        WITH name, count
+        MATCH (n:{type} {{name: name}})
+        OPTIONAL MATCH (n)-[:member_of]->(o)
+
+        WITH *, {{
+            id: elementId(n),
+            element: n,
+            links: collect(o)
+        }} AS node
+
+        RETURN name, count, collect(node) AS nodelist
         ORDER BY name
         """
     )
 
     for record in result:
-        consumer(record.value("id"), record.value("node"), record.value("memberships"))
+        name = record.value("name")
+        count = record.value("count")
+        objects = [
+            (
+                (
+                    ObjectId(type, node.get("id")),
+                    node.get("element")
+                ),
+                node.get("links")
+            )
+            for node in record.value("nodelist")
+        ]
+        callback(name, count, objects)
 
 
 """ MATCH (n:Person)
